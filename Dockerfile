@@ -13,4 +13,4 @@ EXPOSE 4096
 
 # Chạy trực tiếp lệnh web của opencode
 # Dùng 'bunx' để nó tự tìm lệnh 'opencode' trong thư mục vừa cài
-CMD ["bunx", "opencode", "web"]
+CMD ["bunx", "opencode", "web", "--hostname", "0.0.0.0"]
