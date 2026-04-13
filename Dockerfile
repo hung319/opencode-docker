@@ -1,20 +1,27 @@
-# Sử dụng bản node nhẹ để tối ưu dung lượng image
-FROM node:20-alpine
+# Sử dụng Debian Slim để có đầy đủ glibc và sự ổn định
+FROM node:20-bullseye-slim
 
-# Cài đặt các phụ thuộc hệ thống cần thiết (nếu opencode-ai cần build tool)
-# Nếu không cần, bạn có thể xóa dòng RUN apk này
-RUN apk add --no-cache python3 make g++
+# Cài đặt các công cụ cần thiết để build và chạy binary
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    chmod \
+    && rm -rf /var/lib/apt/lists/*
 
-# Cài đặt toàn cục opencode-ai
+# Cài đặt opencode-ai toàn cục
 RUN npm install -g opencode-ai
 
-# Thiết lập các biến môi trường mặc định
+# Sửa lỗi quyền thực thi (nếu có) trên Debian
+RUN chmod +x /usr/local/lib/node_modules/opencode-ai/bin/.opencode
+
+# Thiết lập biến môi trường mặc định
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Mở port (thông báo cho Docker biết container lắng nghe ở port nào)
+# Mở port
 EXPOSE ${PORT}
 
-# Lệnh chạy ứng dụng sử dụng các biến ENV
-# Sử dụng shell form để các biến ENV được thay thế chính xác
+# Chạy ứng dụng
+# Sử dụng shell form để ENV được nhận diện chính xác
 CMD opencode serve --port ${PORT} --hostname ${HOSTNAME}
