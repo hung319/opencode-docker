@@ -1,27 +1,24 @@
-# Sử dụng Debian Slim để có đầy đủ glibc và sự ổn định
+# Sử dụng Debian Slim
 FROM node:20-bullseye-slim
 
-# Cài đặt các công cụ cần thiết để build và chạy binary
+# Cài đặt các công cụ build (Xóa chmod khỏi danh sách này vì nó có sẵn rồi)
 RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
-    chmod \
     && rm -rf /var/lib/apt/lists/*
 
-# Cài đặt opencode-ai toàn cục
+# Cài đặt opencode-ai
 RUN npm install -g opencode-ai
 
-# Sửa lỗi quyền thực thi (nếu có) trên Debian
+# Vẫn giữ lệnh chmod này vì nó dùng lệnh có sẵn trong hệ thống để sửa quyền file
 RUN chmod +x /usr/local/lib/node_modules/opencode-ai/bin/.opencode
 
-# Thiết lập biến môi trường mặc định
+# Biến môi trường
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Mở port
 EXPOSE ${PORT}
 
-# Chạy ứng dụng
-# Sử dụng shell form để ENV được nhận diện chính xác
-CMD opencode serve --port ${PORT} --hostname ${HOSTNAME}
+# Sử dụng JSON format cho CMD theo khuyến nghị của Docker để xử lý tín hiệu tốt hơn
+CMD ["sh", "-c", "opencode serve --port ${PORT} --hostname ${HOSTNAME}"]
