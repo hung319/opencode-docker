@@ -1,34 +1,73 @@
-name: amd,arm docker img
+name: build amd,arm docker img
+
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # Chạy tự động vào 00:00 mỗi ngày
+  workflow_dispatch:      # Giữ lại nút bấm tay nếu cần
 
 jobs:
-  build:
+  check-and-build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
 
     steps:
-      # Checkout code
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
-      # Set up Docker Buildx
+      - name: Get latest release version
+        id: get_version
+        run: |
+          # Lấy tag_name từ release mới nhất qua GitHub API
+          LATEST_TAG=$(curl -s https://api.github.com/repos/anomalyco/opencode/releases/latest | jq -r .tag_name)
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          
+          # Đọc version cũ từ file version.txt (nếu có)
+          OLD_TAG=$(cat version.txt 2>/dev/null || echo "none")
+          echo "old_tag=$OLD_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update version file and Commit
+        if: github.event_name == 'schedule' && steps.get_version.outputs.latest_tag != steps.get_version.outputs.old_tag
+        run: |
+          echo "${{ steps.get_version.outputs.latest_tag }}" > version.txt
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add version.txt
+          git commit -m "Update version to ${{ steps.get_version.outputs.latest_tag }}"
+          git push
+
+      - name: Check if build is needed
+        id: build_check
+        run: |
+          # Build nếu: 1. Chạy bằng tay (dispatch) HOẶC 2. Có version mới
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ steps.get_version.outputs.latest_tag }}" != "${{ steps.get_version.outputs.old_tag }}" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Các bước build Docker chỉ chạy khi should_build là true
       - name: Set up Docker Buildx
+        if: steps.build_check.outputs.should_build == 'true'
         uses: docker/setup-buildx-action@v3
 
-      # Log in to GitHub Container Registry using the automatically generated token
       - name: Log in to GitHub Container Registry
+        if: steps.build_check.outputs.should_build == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          # Use the built‑in GITHUB_TOKEN; no secret needed
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build and push multi‑platform Docker image
       - name: Build and Push Docker Image
+        if: steps.build_check.outputs.should_build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          # Gắn cả tag latest và tag phiên bản cụ thể
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ steps.get_version.outputs.latest_tag }}
           platforms: linux/amd64,linux/arm64
